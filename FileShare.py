@@ -20,7 +20,10 @@ def send_file(file_path, addr):
                     while chunk := f.read(4096):
                         s.sendall(chunk)
         except Exception as e:
-            root.after(0, lambda: messagebox.showerror("Error", str(e)))
+            tmp = ctk.CTk()
+            tmp.withdraw()
+            messagebox.showerror("Error", str(e))
+            tmp.destroy()
     threading.Thread(target=_send, daemon=True).start()
 
 # --- File receiving ---
@@ -33,13 +36,16 @@ def handle_client(conn, addr):
     file_name = name.decode()
 
     def ask_accept():
+        tmp = ctk.CTk()
+        tmp.withdraw()
         if messagebox.askyesno("File incoming", f"{addr[0]} wants to send {file_name}. Accept?"):
             with open(file_name, 'wb') as f:
                 while data := conn.recv(4096):
                     f.write(data)
         conn.close()
+        tmp.destroy()
 
-    root.after(0, ask_accept)  # schedule on main thread
+    threading.Thread(target=ask_accept).start()
 
 def server():
     with socket.socket() as s:
@@ -69,11 +75,13 @@ def listener():
 # --- GUI to select file and send to peers ---
 def open_send_window():
     global file_to_send
+    # File dialog
     file_path = filedialog.askopenfilename(title="Select file to send")
     if not file_path:
         return
     file_to_send = file_path
 
+    # Create a Toplevel window from main root
     win = ctk.CTkToplevel(root)
     win.title("Send File to Peers")
     win.geometry("300x400")
@@ -111,16 +119,17 @@ def start_tray():
         "P2P File Transfer",
         menu=pystray.Menu(pystray.MenuItem("Send File", lambda icon, item: root.after(0, open_send_window)))
     )
-    # On Linux, run in detached mode so it doesn't block
-    icon.run_detached()
+    icon.run()
 
-# --- Main ---
+# --- Start main root ---
 root = ctk.CTk()
-root.withdraw()  # start hidden
+root.withdraw()  # hide main window
 
+# --- Start background threads ---
 threading.Thread(target=server, daemon=True).start()
 threading.Thread(target=broadcaster, daemon=True).start()
 threading.Thread(target=listener, daemon=True).start()
 threading.Thread(target=start_tray, daemon=True).start()
 
+# --- Start Tk mainloop ---
 root.mainloop()
